@@ -2,35 +2,36 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#define _USE_MATH_DEFINES
 #include <math.h>
 #define MAXLINE 100
-#define _USE_MATH_DEFINES
 #define N 4
 
 void sinx_taylor(int num_elements, int terms, double* x, double* result) {
-	int pid[N];
+	int pid;
 	int fd[2*N];
 	int* p_fd = fd;
 	
-	for(int i = 0; i < N; i++) {
+	for(int i = 0; i < num_elements; i++) {
+		int* p_fd = &fd[2*i];
 		pipe(p_fd);
-		p_fd += 2;
 	}
 
 	char message[MAXLINE], line[MAXLINE];
 	int length;
 		
-	for(int i = 0; i < num_elements; i++) {	// 자식 프로세스
+	for(int i = 0; i < num_elements; i++) {	
 		int* p_fd = &fd[2*i];
-		if((pid[i] = fork()) == 0) { 
+		if((pid = fork()) == 0) { 
 			close(p_fd[0]);
-
+			
+			int my_id = i;
 			double value = x[i];
 			double numer = x[i] * x[i] * x[i];
-			double denom = 6.; // 3!
+			double denom = 6; // 3!
 			int sign = -1;
 	
-			for(int j = 1; j < num_elements; j++) {
+			for(int j = 1; j <= terms; j++) {
 				value += (double)sign * numer / denom;
 				numer *= x[i] * x[i];
 				denom *= (2.*(double)j+2.) * (2.*(double)j+3);
@@ -38,22 +39,24 @@ void sinx_taylor(int num_elements, int terms, double* x, double* result) {
 			}
 
 			result[i] = value;
-			sprintf(message, "%lf\n", result[i]);
+			sprintf(message, "%lf \n", result[i]);
 			length = strlen(message) + 1;
 			write(p_fd[1], message, length);
-			exit(i);
+			exit(my_id);
 		} else {
 		close(p_fd[1]);
 		}
 	}
 	int stat;
 		
-	for(int i = 0; i <= N; i++) {
+	for(int i = 0; i < num_elements; i++) {
 		wait(&stat);
 
 		int child_id = stat >> 8;
-		read(fd[child_id*2+0], line, MAXLINE);
-		result[child_id] = atof(line);
+		read(fd[2*child_id], line, MAXLINE);
+		printf("%d %s\n", child_id, line);
+		double res = atof(line);
+		result[child_id] = res;
 	}
 }
 
@@ -66,8 +69,7 @@ int main() {
 	for(int i = 0; i < N; i++) {
 		printf("sin(%.2f) by Taylor series = %f\n", x[i], res[i]);
 		printf("sin(%.2f) = %f\n", x[i], sin(x[i]));
-
-		return 0;
-
 	}
+
+	return 0;
 }
